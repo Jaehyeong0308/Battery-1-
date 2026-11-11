@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>어둠 속의 메아리 - 3D 공포 탈출 게임</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      color: #fff;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    /* 중앙 조준점 (+) */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+    .cross-line-h {
+      width: 14px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.85);
+      position: absolute;
+      top: -1px;
+      left: -7px;
+    }
+    .cross-line-v {
+      width: 2px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.85);
+      position: absolute;
+      top: -7px;
+      left: -1px;
+    }
+    .cross-dot {
+      width: 4px;
+      height: 4px;
+      background: #ef4444;
+      border-radius: 50%;
+      position: absolute;
+      top: -2px;
+      left: -2px;
+    }
+    /* HUD 오버레이: 좌측 상단 배터리 */
+    #battery-hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 999;
+      background: rgba(10, 13, 18, 0.88);
+      border: 1px solid #334155;
+      padding: 12px 18px;
+      border-radius: 8px;
+      min-width: 220px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+    }
+    .hud-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    #battery-val {
+      font-weight: bold;
+      font-size: 14px;
+      font-family: monospace;
+      color: #fff;
+    }
+    .battery-bar-bg {
+      width: 100%;
+      height: 9px;
+      background: #14171d;
+      border: 1px solid #334155;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #battery-bar {
+      width: 100%;
+      height: 100%;
+      background: #10b981;
+      transition: width 0.1s linear, background-color 0.2s ease;
+    }
+    #battery-warning {
+      display: none;
+      font-size: 11px;
+      color: #ef4444;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 6px;
+      animation: blink 0.8s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.25; }
+    }
+    /* HUD 오버레이: 우측 상단 단서 */
+    #clues-hud {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 999;
+      background: rgba(10, 13, 18, 0.88);
+      border: 1px solid #334155;
+      padding: 12px 18px;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+      text-align: right;
+    }
+    .clue-boxes {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .clue-box {
+      width: 32px;
+      height: 40px;
+      border: 1px solid #334155;
+      background: #101318;
+      color: #64748b;
+      font-family: monospace;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    .clue-box.found {
+      border-color: #ef4444;
+      background: rgba(185, 28, 28, 0.3);
+      color: #fca5a5;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+    }
+    /* 상호작용 안내 프롬프트 */
+    #interaction-prompt {
+      position: absolute;
+      bottom: 85px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 14, 20, 0.92);
+      border: 1px solid #f59e0b;
+      color: #fef3c7;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+      z-index: 500;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.8);
+    }
+    /* 경고 알림 배너 */
+    #alert-banner {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(127, 29, 29, 0.95);
+      border: 1px solid #ef4444;
+      color: #fee2e2;
+      padding: 10px 22px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+      z-index: 500;
+    }
+    /* 귀신 출현 경고 배너 */
+    #ghost-banner {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(153, 27, 27, 0.96);
+      border: 2px solid #ef4444;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      display: none;
+      z-index: 600;
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.8);
+      animation: bounce 1s infinite alternate;
+    }
+    @keyframes bounce {
+      from { transform: translate(-50%, 0); }
+      to { transform: translate(-50%, -6px); }
+    }
+    /* 메뉴 오버레이 */
+    .overlay-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.88);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .card {
+      background: #0d1117;
+      border: 1px solid #28313e;
+      padding: 36px 32px;
+      border-radius: 14px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.9);
+    }
+    .sub-badge {
+      font-size: 12px;
+      font-weight: bold;
+      color: #ef4444;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .card h1 {
+      font-size: 28px;
+      font-weight: 900;
+      margin-bottom: 14px;
+      color: #f8fafc;
+    }
+    .card p {
+      font-size: 13.5px;
+      color: #94a3b8;
+      line-height: 1.6;
+      margin-bottom: 22px;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: #141922;
+      border: 1px solid #232d3d;
+      padding: 14px;
+      border-radius: 8px;
+      text-align: left;
+      font-size: 12.5px;
+      color: #e2e8f0;
+      margin-bottom: 24px;
+    }
+    .controls-grid strong {
+      color: #fbbf24;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+    .btn-action {
+      width: 100%;
+      background: #b91c1c;
+      color: #fff;
+      border: none;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(185, 28, 28, 0.4);
+      transition: background 0.15s;
+    }
+    .btn-action:hover {
+      background: #dc2626;
+    }
+    .btn-clear {
+      width: 100%;
+      background: #059669;
+      color: #fff;
+      border: none;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+      margin-top: 20px;
+    }
+    .btn-clear:hover {
+      background: #10b981;
+    }
+    #gameover-screen, #clear-screen {
+      display: none;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- 중앙 조준점 -->
+  <div id="crosshair">
+    <div class="cross-line-h"></div>
+    <div class="cross-line-v"></div>
+    <div class="cross-dot"></div>
+  </div>
+
+  <div id="interaction-prompt">Press [E] or Click to Interact</div>
+  <div id="alert-banner">⚠ 문이 잠겨 있습니다: 3개의 암호 숫자를 모두 찾아야 합니다!</div>
+  <div id="ghost-banner">👻 경고: 배터리 소진! 정체불명의 귀신이 당신을 쫓아옵니다! 도망치세요!</div>
+
+  <!-- HUD: 배터리 -->
+  <div id="battery-hud">
+    <div class="hud-title">
+      <span>손전등 배터리</span>
+      <span id="battery-val">100%</span>
+    </div>
+    <div class="battery-bar-bg">
+      <div id="battery-bar"></div>
+    </div>
+    <div id="battery-warning">⚠ 배터리 부족: 조명 깜빡임 주의</div>
+  </div>
+
+  <!-- HUD: 단서 -->
+  <div id="clues-hud">
+    <div class="hud-title">
+      <span>벽면 암호 단서</span>
+      <span id="clues-count">0 / 3</span>
+    </div>
+    <div class="clue-boxes">
+      <div id="clue-0" class="clue-box">?</div>
+      <div id="clue-1" class="clue-box">?</div>
+      <div id="clue-2" class="clue-box">?</div>
+    </div>
+  </div>
+
+  <!-- 시작 설명 화면 -->
+  <div id="instructions-overlay" class="overlay-screen">
+    <div class="card">
+      <span class="sub-badge">지하 시설 격리구역</span>
+      <h1>어둠 속의 메아리</h1>
+      <p>
+        폐쇄된 지하 시설에 갇혔습니다. 손전등 배터리가 0%가 되면 **귀신이 출현하여 당신을 쫓아옵니다!**
+        복도를 수색하여 3개의 붉은 암호 숫자를 확인하고, 노란색 예비 배터리를 모아 비상 탈출구를 열고 탈출하세요!
+      </p>
+      <div class="controls-grid">
+        <div>
+          <strong>조작 방법:</strong>
+          • [W, A, S, D] 이동<br>
+          • [마우스] 시점 둘러보기<br>
+          • [E] 또는 [클릭] 획득 / 조사<br>
+          • [ESC] 일시정지 메뉴
+        </div>
+        <div>
+          <strong>미션 목표:</strong>
+          • 🔋 노란색 배터리 수집 (+25%)<br>
+          • 👻 배터리 0% 시 귀신 추격 주의<br>
+          • 🩸 벽면 붉은 암호 3개 발견<br>
+          • 🚪 비상 키패드 문 열고 탈출
+        </div>
+      </div>
+      <button class="btn-action">화면을 클릭하여 시작 (마우스 조작 고정)</button>
+      <div style="font-size: 11px; color: #94a3b8; margin-top: 12px;">
+        ※ 클릭하면 마우스 커서가 3D 1인칭 조작 모드로 자동 잠금됩니다.
+      </div>
+    </div>
+  </div>
+
+  <!-- 게임 오버 (Game Over) 화면 -->
+  <div id="gameover-screen" class="overlay-screen" style="background: rgba(40, 0, 0, 0.94);">
+    <div class="card" style="border: 2px solid #ef4444; box-shadow: 0 0 50px rgba(255,0,0,0.6);">
+      <div style="font-size: 54px; margin-bottom: 8px;">☠</div>
+      <span class="sub-badge">생체 신호 정지 (SIGNAL LOST)</span>
+      <h1 style="color: #ef4444; font-size: 32px;">게임 오버</h1>
+      <p style="color: #fca5a5;">
+        손전등 배터리가 방전되어 나타난 <strong style="color: #fff;">귀신에게 붙잡혔습니다.</strong><br>
+        어둠 속에서 영원히 빠져나오지 못했습니다...
+      </p>
+      <button class="btn-action" style="background: #ef4444; margin-top: 10px;" onclick="window.location.reload()">다시 도전하기</button>
+    </div>
+  </div>
+
+  <!-- 탈출 성공 (Clear!) 화면 -->
+  <div id="clear-screen" class="overlay-screen">
+    <div class="card" style="border-color: #059669;">
+      <span class="sub-badge" style="color: #10b981;">비상 에어락 감압 완료</span>
+      <h1 style="color: #fff;">탈출 성공!</h1>
+      <p>
+        3개의 암호 숫자 <strong style="color:#10b981; font-family:monospace; font-size:18px;">4 - 7 - 2</strong>를 모두 해독하고 귀신과 어둠 속에서 무사히 탈출했습니다!
+      </p>
+      <div class="controls-grid" style="grid-template-columns: 1fr; text-align: center;">
+        <div>
+          <span style="color:#94a3b8; font-size:12px;">남은 배터리 잔량</span>
+          <div id="final-battery" style="color:#fbbf24; font-size:24px; font-weight:bold; margin-top:4px;">100%</div>
+        </div>
+      </div>
+      <button class="btn-clear" onclick="window.location.reload()">다시 플레이하기</button>
+    </div>
+  </div>
+
+  <script>
+    THREE.PointerLockControls = function (camera, domElement) {
+      this.domElement = domElement || document.body;
+      this.isLocked = false;
+      var scope = this;
+      var changeEvent = { type: 'change' };
+      var lockEvent = { type: 'lock' };
+      var unlockEvent = { type: 'unlock' };
+      var euler = new THREE.Euler(0, 0, 0, 'YXZ');
+      var PI_2 = Math.PI / 2;
+
+      function onMouseMove(event) {
+        if (!scope.isLocked) return;
+        var movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+        var movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+        euler.setFromQuaternion(camera.quaternion);
+        euler.y -= movementX * 0.0022;
+        euler.x -= movementY * 0.0022;
+        euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
+        camera.quaternion.setFromEuler(euler);
+        scope.dispatchEvent(changeEvent);
+      }
+
+      function onPointerlockChange() {
+        if (scope.domElement.ownerDocument.pointerLockElement === scope.domElement) {
+          scope.dispatchEvent(lockEvent);
+          scope.isLocked = true;
+        } else {
+          scope.dispatchEvent(unlockEvent);
+          scope.isLocked = false;
+        }
+      }
+
+      this.connect = function () {
+        scope.domElement.ownerDocument.addEventListener('mousemove', onMouseMove, false);
+        scope.domElement.ownerDocument.addEventListener('pointerlockchange', onPointerlockChange, false);
+      };
+
+      this.disconnect = function () {
+        scope.domElement.ownerDocument.removeEventListener('mousemove', onMouseMove, false);
+        scope.domElement.ownerDocument.removeEventListener('pointerlockchange', onPointerlockChange, false);
+      };
+
+      this.dispose = function () { this.disconnect(); };
+      this.lock = function () { this.domElement.requestPointerLock(); };
+      this.unlock = function () { scope.domElement.ownerDocument.exitPointerLock(); };
+      this.connect();
+    };
+    THREE.PointerLockControls.prototype = Object.create(THREE.EventDispatcher.prototype);
+
+    var audioCtx = null;
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+        var osc1 = audioCtx.createOscillator();
+        var osc2 = audioCtx.createOscillator();
+        var filter = audioCtx.createBiquadFilter();
+        var droneGain = audioCtx.createGain();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(45, audioCtx.currentTime);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(48, audioCtx.currentTime);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(125, audioCtx.currentTime);
+        droneGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(droneGain);
+        droneGain.connect(audioCtx.destination);
+        osc1.start();
+        osc2.start();
+      } catch (e) {}
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      var now = audioCtx.currentTime;
+      if (type === 'step') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(65 + Math.random() * 20, now);
+        gain.gain.setValueAtTime(0.03, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.11);
+      } else if (type === 'battery') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.16);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.36);
+      } else if (type === 'clue') {
+        [330, 392, 493.88].forEach(function(freq, i) {
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          gain.gain.setValueAtTime(0.12, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.55);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + i * 0.08);
+          osc.stop(now + i * 0.08 + 0.6);
+        });
+      } else if (type === 'ghost') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(140, now + 1.2);
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 1.35);
+      } else if (type === 'jumpscare') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.linearRampToValueAtTime(80, now + 0.8);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 1.1);
+      } else if (type === 'door') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(85, now);
+        osc.frequency.linearRampToValueAtTime(40, now + 1.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 1.4);
+      } else if (type === 'beep') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1046.5, now);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      } else if (type === 'error') {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.36);
+      }
+    }
+
+    function makeNoiseTexture(color1, color2) {
+      var canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = color1;
+      ctx.fillRect(0, 0, 256, 256);
+      var imgData = ctx.getImageData(0, 0, 256, 256);
+      var d = imgData.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var n = (Math.random() - 0.5) * 28;
+        d[i] = Math.min(255, Math.max(0, d[i] + n));
+        d[i+1] = Math.min(255, Math.max(0, d[i+1] + n));
+        d[i+2] = Math.min(255, Math.max(0, d[i+2] + n));
+      }
+      ctx.putImageData(imgData, 0, 0);
+      ctx.strokeStyle = color2;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, 256, 256);
+      var tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function makeClueTexture(digit, index) {
+      var canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 512, 512);
+
+      ctx.fillStyle = 'rgba(160, 20, 20, 0.6)';
+      for (var i = 0; i < 35; i++) {
+        var x = 256 + (Math.random() - 0.5) * 320;
+        var y = 256 + (Math.random() - 0.5) * 320;
+        ctx.beginPath();
+        ctx.arc(x, y, 4 + Math.random() * 22, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillStyle = '#ff4444';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 14;
+      ctx.fillText('비밀 암호 #' + index, 256, 160);
+
+      ctx.font = 'bold 165px monospace';
+      ctx.fillStyle = '#ff2222';
+      ctx.shadowBlur = 26;
+      ctx.fillText(digit, 256, 320);
+
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillStyle = '#cc2222';
+      ctx.shadowBlur = 6;
+      ctx.fillText('절대 잊지 말 것', 256, 385);
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    function makeDoorTexture() {
+      var canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#343e4a';
+      ctx.fillRect(0, 0, 512, 512);
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = '#5c6b7e';
+      ctx.strokeRect(8, 8, 496, 496);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(16, 18, 480, 48);
+      ctx.rect(16, 446, 480, 48);
+      ctx.clip();
+      for (var x = -50; x < 600; x += 38) {
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + 22, 0);
+        ctx.lineTo(x - 14, 512);
+        ctx.lineTo(x - 36, 512);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.fillStyle = '#111822';
+      ctx.fillRect(136, 115, 240, 110);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(136, 115, 240, 110);
+
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ef4444';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 8;
+      ctx.fillText('잠김 [3자리 암호]', 256, 162);
+
+      ctx.font = 'bold 15px sans-serif';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillText('시설 비상 탈출구 (에어락)', 256, 198);
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // --- 귀신 3D 모델 생성 함수 ---
+    function buildGhostMesh() {
+      var ghost = new THREE.Group();
+
+      var bodyGeo = new THREE.ConeGeometry(0.55, 1.9, 16, 4, true);
+      var bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xddf2fd,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.35,
+        transparent: true,
+        opacity: 0.82,
+        roughness: 0.3,
+        side: THREE.DoubleSide
+      });
+      var body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.95;
+      ghost.add(body);
+
+      var headGeo = new THREE.SphereGeometry(0.32, 16, 16);
+      var headMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, emissive: 0xef4444, emissiveIntensity: 0.25 });
+      var head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 1.95;
+      ghost.add(head);
+
+      var eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      var eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+      var leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+      leftEye.position.set(-0.1, 1.98, -0.26);
+      ghost.add(leftEye);
+
+      var rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+      rightEye.position.set(0.1, 1.98, -0.26);
+      ghost.add(rightEye);
+
+      var eyeLight = new THREE.PointLight(0xff0000, 2.5, 7.0);
+      eyeLight.position.set(0, 1.95, -0.3);
+      ghost.add(eyeLight);
+
+      var armMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, emissive: 0xef4444, emissiveIntensity: 0.2 });
+      var armGeo = new THREE.CylinderGeometry(0.06, 0.04, 0.8, 8);
+      var leftArm = new THREE.Mesh(armGeo, armMat);
+      leftArm.position.set(-0.45, 1.45, -0.3);
+      leftArm.rotation.x = -Math.PI / 3;
+      ghost.add(leftArm);
+
+      var rightArm = new THREE.Mesh(armGeo, armMat);
+      rightArm.position.set(0.45, 1.45, -0.3);
+      rightArm.rotation.x = -Math.PI / 3;
+      ghost.add(rightArm);
+
+      return ghost;
+    }
+
+    // --- 게임 상태 및 씬 초기화 ---
+    var container = document.getElementById('canvas-container');
+    var crosshair = document.getElementById('crosshair');
+    var promptEl = document.getElementById('interaction-prompt');
+    var alertEl = document.getElementById('alert-banner');
+    var ghostBannerEl = document.getElementById('ghost-banner');
+    var overlayEl = document.getElementById('instructions-overlay');
+    var clearScreenEl = document.getElementById('clear-screen');
+    var gameoverScreenEl = document.getElementById('gameover-screen');
+    var batteryValEl = document.getElementById('battery-val');
+    var batteryBarEl = document.getElementById('battery-bar');
+    var batteryWarnEl = document.getElementById('battery-warning');
+    var cluesCountEl = document.getElementById('clues-count');
+
+    var SECRET_CODE = ['4', '7', '2'];
+    var cluesDiscovered = [false, false, false];
+    var battery = 100;
+    var isGameClear = false;
+    var isGameOver = false;
+
+    var MAP = [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
+      [1, 0, 1, 0, 0, 0, 2, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+      [1, 0, 0, 0, 5, 1, 0, 0, 0, 1, 0, 1],
+      [1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1],
+      [1, 3, 0, 0, 0, 0, 0, 1, 5, 0, 0, 1],
+      [1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 4, 1],
+      [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 9, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ];
+    var CELL = 4.0;
+    var WALL_H = 3.6;
+
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a212d);
+    scene.fog = new THREE.FogExp2(0x1a212d, 0.008); // 시야 탁 트이게 설정
+
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 120);
+    camera.position.set(1 * CELL + 2, 1.6, 1 * CELL + 2);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.55; // 시야 대폭 밝기 상향
+    container.appendChild(renderer.domElement);
+
+    // 1. 밝은 앰비언트 라이트 (2.2)
+    var ambientLight = new THREE.AmbientLight(0x94a3b8, 2.2);
+    scene.add(ambientLight);
+
+    // 2. 헤미스피어 라이트 (1.4)
+    var hemiLight = new THREE.HemisphereLight(0xcfd8dc, 0x475569, 1.4);
+    scene.add(hemiLight);
+
+    // 3. 강력한 손전등 (7.0, 범위 55, 광각)
+    var flashlight = new THREE.SpotLight(0xfffaed, 7.0, 55, Math.PI / 3.5, 0.45, 1.0);
+    flashlight.position.set(0.18, -0.15, 0);
+    camera.add(flashlight);
+
+    var flashlightTarget = new THREE.Object3D();
+    flashlightTarget.position.set(0, 0, -10);
+    camera.add(flashlightTarget);
+    flashlight.target = flashlightTarget;
+
+    scene.add(camera);
+
+    // 4. 복도 천장 비상 조명 (대폭 밝기 강화)
+    var lights = [
+      [2 * CELL + 2, 3.2, 1 * CELL + 2, 0x60a5fa],
+      [6 * CELL + 2, 3.2, 3 * CELL + 2, 0xf87171],
+      [4 * CELL + 2, 3.2, 7 * CELL + 2, 0x34d399],
+      [8 * CELL + 2, 3.2, 9 * CELL + 2, 0xfbbf24],
+      [10 * CELL + 2, 3.2, 5 * CELL + 2, 0x818cf8],
+      [2 * CELL + 2, 3.2, 9 * CELL + 2, 0x38bdf8]
+    ];
+    lights.forEach(function(l) {
+      var pl = new THREE.PointLight(l[3], 2.0, 16);
+      pl.position.set(l[0], l[1], l[2]);
+      scene.add(pl);
+    });
+
+    // 5. 귀신 메쉬 생성 및 초기 비활성화
+    var ghostMesh = buildGhostMesh();
+    ghostMesh.visible = false;
+    scene.add(ghostMesh);
+
+    var ghostActive = false;
+
+    // 컨트롤
+    var controls = new THREE.PointerLockControls(camera, renderer.domElement);
+
+    overlayEl.addEventListener('click', function () {
+      initAudio();
+      controls.lock();
+    });
+
+    controls.addEventListener('lock', function () {
+      overlayEl.style.display = 'none';
+      crosshair.style.display = 'block';
+    });
+
+    controls.addEventListener('unlock', function () {
+      if (!isGameClear && !isGameOver) {
+        overlayEl.style.display = 'flex';
+        crosshair.style.display = 'none';
+      }
+    });
+
+    // 머티리얼
+    var floorTex = makeNoiseTexture('#384352', '#29323d');
+    floorTex.repeat.set(MAP[0].length, MAP.length);
+    var floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.65 });
+
+    var ceilTex = makeNoiseTexture('#2b3440', '#1c232c');
+    ceilTex.repeat.set(MAP[0].length, MAP.length);
+    var ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.8 });
+
+    var wallTex = makeNoiseTexture('#3a4452', '#29323d');
+    var wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.5, metalness: 0.35 });
+
+    var totalW = MAP[0].length * CELL;
+    var totalD = MAP.length * CELL;
+
+    var floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(totalW, totalD), floorMat);
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.set(totalW / 2, 0, totalD / 2);
+    scene.add(floorMesh);
+
+    var ceilMesh = new THREE.Mesh(new THREE.PlaneGeometry(totalW, totalD), ceilMat);
+    ceilMesh.rotation.x = Math.PI / 2;
+    ceilMesh.position.set(totalW / 2, WALL_H, totalD / 2);
+    scene.add(ceilMesh);
+
+    var wallColliders = [];
+    var batteries = [];
+    var clues = [];
+    var doorMesh = null;
+    var doorLight = null;
+    var doorPos = new THREE.Vector3();
+
+    var boxGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+
+    for (var r = 0; r < MAP.length; r++) {
+      for (var c = 0; c < MAP[r].length; c++) {
+        var cell = MAP[r][c];
+        var wx = c * CELL + CELL / 2;
+        var wz = r * CELL + CELL / 2;
+
+        if (cell === 1) {
+          var w = new THREE.Mesh(boxGeo, wallMat);
+          w.position.set(wx, WALL_H / 2, wz);
+          scene.add(w);
+          wallColliders.push({ minX: wx - CELL / 2, maxX: wx + CELL / 2, minZ: wz - CELL / 2, maxZ: wz + CELL / 2 });
+        } else if (cell === 5) {
+          var bGroup = new THREE.Group();
+          var cylGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.55, 16);
+          var cylMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3, metalness: 0.5, emissive: 0xeab308, emissiveIntensity: 0.55 });
+          var cyl = new THREE.Mesh(cylGeo, cylMat);
+          bGroup.add(cyl);
+
+          var tipGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 12);
+          var tipMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.9, roughness: 0.2 });
+          var tip = new THREE.Mesh(tipGeo, tipMat);
+          tip.position.y = 0.3;
+          bGroup.add(tip);
+
+          var ringGeo = new THREE.CylinderGeometry(0.185, 0.185, 0.12, 16);
+          var ringMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
+          var ring = new THREE.Mesh(ringGeo, ringMat);
+          ring.position.y = -0.22;
+          bGroup.add(ring);
+
+          var bLight = new THREE.PointLight(0xfde047, 2.0, 7.0);
+          bLight.position.set(0, 0.35, 0);
+          bGroup.add(bLight);
+
+          bGroup.position.set(wx, 0.45, wz);
+          scene.add(bGroup);
+
+          batteries.push({
+            group: bGroup,
+            pos: new THREE.Vector3(wx, 0.45, wz),
+            collected: false
+          });
+        } else if (cell === 2 || cell === 3 || cell === 4) {
+          var clueIdx = (cell === 2) ? 0 : (cell === 3 ? 1 : 2);
+          var digit = SECRET_CODE[clueIdx];
+          var cMat = new THREE.MeshStandardMaterial({
+            map: makeClueTexture(digit, clueIdx + 1),
+            transparent: true,
+            emissive: 0xef4444,
+            emissiveIntensity: 0.95
+          });
+          var cPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), cMat);
+
+          if (r > 0 && MAP[r-1][c] === 1) {
+            cPlane.position.set(wx, 1.7, (r - 0.5) * CELL + 0.04);
+            cPlane.rotation.y = 0;
+          } else if (r < MAP.length - 1 && MAP[r+1][c] === 1) {
+            cPlane.position.set(wx, 1.7, (r + 0.5) * CELL - 0.04);
+            cPlane.rotation.y = Math.PI;
+          } else if (c > 0 && MAP[r][c-1] === 1) {
+            cPlane.position.set((c - 0.5) * CELL + 0.04, 1.7, wz);
+            cPlane.rotation.y = Math.PI / 2;
+          } else {
+            cPlane.position.set((c + 0.5) * CELL - 0.04, 1.7, wz);
+            cPlane.rotation.y = -Math.PI / 2;
+          }
+          scene.add(cPlane);
+
+          var rGlow = new THREE.PointLight(0xff2222, 2.0, 6.0);
+          rGlow.position.copy(cPlane.position);
+          scene.add(rGlow);
+
+          clues.push({
+            index: clueIdx,
+            digit: digit,
+            pos: cPlane.position.clone()
+          });
+        } else if (cell === 9) {
+          doorPos.set(wx, 1.6, wz);
+          var dMat = new THREE.MeshStandardMaterial({ map: makeDoorTexture(), roughness: 0.4, metalness: 0.6 });
+          doorMesh = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.9, WALL_H * 0.95, 0.4), dMat);
+          doorMesh.position.set(wx, WALL_H / 2, wz);
+          scene.add(doorMesh);
+
+          doorLight = new THREE.PointLight(0xef4444, 2.8, 10.0);
+          doorLight.position.set(wx, WALL_H * 0.85, wz - 0.3);
+          scene.add(doorLight);
+
+          wallColliders.push({ minX: wx - CELL / 2, maxX: wx + CELL / 2, minZ: wz - 0.3, maxZ: wz + 0.3 });
+        }
+      }
+    }
+
+    var keys = { KeyW: false, KeyA: false, KeyS: false, KeyD: false };
+    window.addEventListener('keydown', function (e) {
+      if (keys[e.code] !== undefined) keys[e.code] = true;
+      if (e.code === 'KeyE') attemptInteract();
+    });
+    window.addEventListener('keyup', function (e) {
+      if (keys[e.code] !== undefined) keys[e.code] = false;
+    });
+    window.addEventListener('mousedown', function (e) {
+      if (e.button === 0 && controls.isLocked) attemptInteract();
+    });
+
+    function attemptInteract() {
+      if (isGameOver || isGameClear) return;
+      var p = camera.position;
+
+      for (var i = 0; i < batteries.length; i++) {
+        var b = batteries[i];
+        if (!b.collected && p.distanceTo(b.pos) < 2.5) {
+          b.collected = true;
+          scene.remove(b.group);
+          playSound('battery');
+          battery = Math.min(100, Math.round(battery + 25));
+          showPrompt('⚡ 예비 배터리 획득! (+25% 충전 완료)');
+
+          // 배터리 획득 시 귀신 퇴치!
+          if (ghostActive) {
+            ghostActive = false;
+            ghostMesh.visible = false;
+            ghostBannerEl.style.display = 'none';
+          }
+          return;
+        }
+      }
+
+      for (var j = 0; j < clues.length; j++) {
+        var c = clues[j];
+        if (p.distanceTo(c.pos) < 2.8) {
+          if (!cluesDiscovered[c.index]) {
+            cluesDiscovered[c.index] = true;
+            playSound('clue');
+            document.getElementById('clue-' + c.index).innerText = c.digit;
+            document.getElementById('clue-' + c.index).classList.add('found');
+            var foundTotal = cluesDiscovered.filter(Boolean).length;
+            cluesCountEl.innerText = foundTotal + ' / 3';
+            showPrompt('🔍 암호 단서 #' + (c.index + 1) + ' 발견: [ ' + c.digit + ' ]');
+          }
+          return;
+        }
+      }
+
+      if (doorMesh && p.distanceTo(doorPos) < 3.2) {
+        var all = cluesDiscovered.every(Boolean);
+        if (all) {
+          playSound('beep');
+          playSound('door');
+          if (doorLight) doorLight.color.setHex(0x22c55e);
+
+          var slide = 0;
+          var timer = setInterval(function () {
+            slide += 0.05;
+            doorMesh.position.y += 0.15;
+            if (slide >= 1) clearInterval(timer);
+          }, 30);
+
+          isGameClear = true;
+          controls.unlock();
+          crosshair.style.display = 'none';
+          document.getElementById('final-battery').innerText = Math.round(battery) + '%';
+          clearScreenEl.style.display = 'flex';
+        } else {
+          playSound('error');
+          var cnt = cluesDiscovered.filter(Boolean).length;
+          showAlert('키패드 잠김: 3개의 암호 숫자를 모두 찾아야 합니다! (' + cnt + '/3 발견)');
+        }
+      }
+    }
+
+    var promptTimer = null;
+    function showPrompt(msg) {
+      promptEl.innerText = msg;
+      promptEl.style.display = 'block';
+      clearTimeout(promptTimer);
+      promptTimer = setTimeout(function () {
+        promptEl.style.display = 'none';
+      }, 2500);
+    }
+
+    var alertTimer = null;
+    function showAlert(msg) {
+      alertEl.innerText = '⚠ ' + msg;
+      alertEl.style.display = 'block';
+      clearTimeout(alertTimer);
+      alertTimer = setTimeout(function () {
+        alertEl.style.display = 'none';
+      }, 3500);
+    }
+
+    var PLAYER_R = 0.45;
+    function resolveWalls(cur, target) {
+      var nx = target.x;
+      for (var i = 0; i < wallColliders.length; i++) {
+        var b = wallColliders[i];
+        if (nx + PLAYER_R > b.minX && nx - PLAYER_R < b.maxX && cur.z + PLAYER_R > b.minZ && cur.z - PLAYER_R < b.maxZ) {
+          nx = cur.x;
+          break;
+        }
+      }
+      var nz = target.z;
+      for (var j = 0; j < wallColliders.length; j++) {
+        var b = wallColliders[j];
+        if (nx + PLAYER_R > b.minX && nx - PLAYER_R < b.maxX && nz + PLAYER_R > b.minZ && nz - PLAYER_R < b.maxZ) {
+          nz = cur.z;
+          break;
+        }
+      }
+      return new THREE.Vector3(nx, target.y, nz);
+    }
+
+    var lastTime = performance.now();
+    var velocity = new THREE.Vector3();
+    var direction = new THREE.Vector3();
+    var stepTimer = 0;
+    var flickerTimer = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      var time = performance.now();
+      var delta = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      for (var i = 0; i < batteries.length; i++) {
+        if (!batteries[i].collected) {
+          batteries[i].group.rotation.y += delta * 1.8;
+          batteries[i].group.position.y = 0.45 + Math.sin(time * 0.003 + i) * 0.08;
+        }
+      }
+
+      // 배터리 소모
+      if (controls.isLocked && !isGameClear && !isGameOver) {
+        battery = Math.max(0, battery - 1.5 * delta);
+        batteryValEl.innerText = Math.round(battery) + '%';
+        batteryBarEl.style.width = Math.max(0, battery) + '%';
+
+        var isLow = battery < 20;
+        if (isLow) {
+          batteryBarEl.style.background = '#ef4444';
+          batteryValEl.style.color = '#ef4444';
+          batteryWarnEl.innerText = battery <= 0 ? '☠ 배터리 소진: 귀신 출현!!' : '⚠ 배터리 부족: 조명 깜빡임 주의';
+          batteryWarnEl.style.display = 'block';
+        } else {
+          batteryBarEl.style.background = battery < 50 ? '#f59e0b' : '#10b981';
+          batteryValEl.style.color = '#fff';
+          batteryWarnEl.style.display = 'none';
+        }
+      }
+
+      // 손전등 밝기
+      if (battery <= 0) {
+        flashlight.intensity = 0;
+      } else if (battery < 20) {
+        flickerTimer += delta;
+        if (flickerTimer > 0.08 + Math.random() * 0.2) {
+          flickerTimer = 0;
+          flashlight.intensity = Math.random() < 0.45 ? (0.4 + Math.random() * 1.2) : (4.5 + Math.random() * 2.5);
+        }
+      } else {
+        flashlight.intensity = 7.0;
+      }
+
+      // --- 배터리 0% 시 귀신 스폰 및 추격 ---
+      if (battery <= 0 && !isGameClear && !isGameOver) {
+        if (!ghostActive) {
+          ghostActive = true;
+          ghostBannerEl.style.display = 'block';
+          playSound('ghost');
+
+          var angle = Math.random() * Math.PI * 2;
+          ghostMesh.position.set(
+            camera.position.x + Math.cos(angle) * 12.0,
+            0.1,
+            camera.position.z + Math.sin(angle) * 12.0
+          );
+          ghostMesh.visible = true;
+        }
+
+        // 귀신 추격 AI
+        var toPlayer = new THREE.Vector3().subVectors(camera.position, ghostMesh.position);
+        toPlayer.y = 0;
+        var distToPlayer = toPlayer.length();
+
+        ghostMesh.lookAt(camera.position.x, ghostMesh.position.y, camera.position.z);
+        ghostMesh.position.y = 0.2 + Math.sin(time * 0.005) * 0.15;
+
+        if (distToPlayer > 0.1) {
+          toPlayer.normalize();
+          ghostMesh.position.x += toPlayer.x * 3.3 * delta;
+          ghostMesh.position.z += toPlayer.z * 3.3 * delta;
+        }
+
+        // 귀신에게 잡혔을 때 게임 오버
+        if (distToPlayer < 1.3) {
+          playSound('jumpscare');
+          isGameOver = true;
+          controls.unlock();
+          crosshair.style.display = 'none';
+          ghostBannerEl.style.display = 'none';
+          gameoverScreenEl.style.display = 'flex';
+        }
+      }
+
+      // 이동
+      if (controls.isLocked && !isGameClear && !isGameOver) {
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+
+        direction.z = Number(keys.KeyW) - Number(keys.KeyS);
+        direction.x = Number(keys.KeyD) - Number(keys.KeyA);
+        direction.normalize();
+
+        var speed = 48.0;
+        if (keys.KeyW || keys.KeyS) velocity.z -= direction.z * speed * delta;
+        if (keys.KeyA || keys.KeyD) velocity.x -= direction.x * speed * delta;
+
+        var euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        euler.setFromQuaternion(camera.quaternion);
+        euler.x = 0;
+        euler.z = 0;
+
+        var fwd = new THREE.Vector3(0, 0, -1).applyEuler(euler);
+        var side = new THREE.Vector3(1, 0, 0).applyEuler(euler);
+
+        var deltaMove = new THREE.Vector3()
+          .addScaledVector(fwd, -velocity.z * delta)
+          .addScaledVector(side, -velocity.x * delta);
+
+        var cur = camera.position.clone();
+        var target = cur.clone().add(deltaMove);
+        var resolved = resolveWalls(cur, target);
+        camera.position.x = resolved.x;
+        camera.position.z = resolved.z;
+
+        var isMoving = Math.abs(velocity.x) > 0.2 || Math.abs(velocity.z) > 0.2;
+        if (isMoving) {
+          stepTimer += delta;
+          if (stepTimer > 0.45) {
+            stepTimer = 0;
+            playSound('step');
+          }
+          camera.position.y = 1.6 + Math.sin(time * 0.01) * 0.04;
+        } else {
+          camera.position.y = 1.6;
+        }
+
+        var pText = null;
+        for (var bIdx = 0; bIdx < batteries.length; bIdx++) {
+          if (!batteries[bIdx].collected && camera.position.distanceTo(batteries[bIdx].pos) < 2.5) {
+            pText = '⚡ [E] 키 또는 클릭: 배터리 획득 (+25% 충전)';
+            break;
+          }
+        }
+        if (!pText) {
+          for (var cIdx = 0; cIdx < clues.length; cIdx++) {
+            if (camera.position.distanceTo(clues[cIdx].pos) < 2.8) {
+              pText = '🔍 [E] 키 또는 클릭: 벽면 단서 #' + (clues[cIdx].index + 1) + ' 조사';
+              break;
+            }
+          }
+        }
+        if (!pText && doorMesh && camera.position.distanceTo(doorPos) < 3.2) {
+          pText = cluesDiscovered.every(Boolean)
+            ? '🚪 [E] 키 또는 클릭: 비상 탈출구 에어락 문 열기'
+            : '🔒 [E] 키 또는 클릭: 키패드 조사 (잠김 - 단서 3개 필요)';
+        }
+        if (pText) {
+          promptEl.innerText = pText;
+          promptEl.style.display = 'block';
+        } else if (!promptTimer) {
+          promptEl.style.display = 'none';
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', function () {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

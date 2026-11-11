@@ -1,0 +1,6 @@
+{
+  "name": "어둠 속의 메아리 - 3D 공포 탈출 게임",
+  "description": "손전등 배터리 관리, 3개의 벽면 붉은 암호 숫자 탐색, 노란색 보충 배터리 수집 및 키패드 비상문 탈출을 즐길 수 있는 1인칭 3D 공포 탈출 게임입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
